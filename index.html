@@ -1,0 +1,1216 @@
+<!-- [Section 1: 網頁宣告與資源引用] Start -->
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title id="pageTitle">劉家川味牛肉麵 - 線上點餐</title>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
+<!-- [Section 1: 網頁宣告與資源引用] End -->
+
+<!-- [Section 2: CSS 樣式設定] Start -->
+  <style>
+    :root {
+      --primary: #d32f2f;
+      --primary-light: #ffebee;
+      --bg: #f7f8fa;
+      --card: #ffffff;
+      --text: #2c3e50;
+      --sub: #7f8c8d;
+      --border: #edf2f7;
+      --green: #2e7d32;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      padding-bottom: 100px;
+    }
+    /* 頂部導覽 */
+    .header {
+      background: var(--card);
+      padding: 16px 18px 12px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .store-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #1a202c;
+      letter-spacing: 0.5px;
+      line-height: 1.25;
+    }
+    .table-badge {
+      font-size: 13px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 20px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .badge-dinein { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+    .badge-occupied { background: #fff8e1; color: #f57f17; border: 1px solid #ffe082; }
+    .badge-takeout { background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; }
+
+    .header-sub {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+    }
+    .info-link {
+      font-size: 13px;
+      color: var(--sub);
+      text-decoration: underline;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .my-orders-btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(211,47,47,0.3);
+      display: none;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* 分類橫向導覽 */
+    .tabs {
+      display: flex;
+      overflow-x: auto;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 76px;
+      z-index: 49;
+      padding: 0 10px;
+      scrollbar-width: none;
+    }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      padding: 12px 16px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--sub);
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      font-weight: 800;
+    }
+
+    /* 餐點卡片列表 */
+    .menu-container { padding: 14px 16px; max-width: 600px; margin: 0 auto; }
+    .menu-card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+      border: 1px solid #f0f0f0;
+    }
+    .menu-card.sold-out { opacity: 0.55; filter: grayscale(90%); }
+    .item-info h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; color: #222; }
+    .item-price { font-size: 15px; font-weight: 700; color: var(--primary); }
+    .btn-select {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 9px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .btn-select:disabled { background: #bdbdbd; cursor: not-allowed; }
+
+    /* 底部懸浮購物車Bar */
+    .cart-bar {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      right: 16px;
+      max-width: 568px;
+      margin: 0 auto;
+      background: #1e1e1e;
+      color: white;
+      border-radius: 30px;
+      padding: 10px 14px 10px 20px;
+      display: none;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+      z-index: 60;
+    }
+    .cart-summary { display: flex; align-items: center; gap: 10px; }
+    .cart-count {
+      background: var(--primary);
+      color: white;
+      font-size: 13px;
+      font-weight: 800;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cart-total { font-size: 16px; font-weight: 700; }
+    .btn-checkout {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 22px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* 彈窗與抽屜通用樣式 */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-box {
+      background: white;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 440px;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+    }
+    .modal-header h3 { font-size: 18px; font-weight: 800; }
+    .close-btn { background: none; border: none; font-size: 22px; color: #888; cursor: pointer; }
+
+    /* 規格選擇Chip */
+    .option-group { margin-bottom: 16px; }
+    .option-label { font-size: 14px; font-weight: 700; color: #555; margin-bottom: 8px; display: block; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1.5px solid #ddd;
+      background: #fafafa;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .chip.selected {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 800;
+    }
+    .qty-control {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f5f5f5;
+      padding: 10px 16px;
+      border-radius: 12px;
+      margin-top: 12px;
+    }
+    .qty-btn {
+      width: 34px; height: 34px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      background: white;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    /* 購物車明細與輸入欄 */
+    .cart-item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .input-field {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 15px;
+      margin-bottom: 10px;
+    }
+
+    /* 訂單狀態儀表板 */
+    #orderDashboard {
+      display: none;
+      max-width: 520px;
+      margin: 16px auto;
+      padding: 0 16px;
+    }
+    .dash-card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+      margin-bottom: 16px;
+    }
+  </style>
+<!-- [Section 2: CSS 樣式設定] End -->
+</head>
+<body>
+
+<!-- [Section 3: HTML 頂部導覽與基本彈窗] Start -->
+  <!-- 系統總授權停權遮罩 (最高優先級) -->
+  <div id="licenseLockOverlay" class="modal-overlay" style="z-index: 10000; background: rgba(15,23,42,0.98); display: none;">
+    <div class="modal-box" style="text-align: center; padding: 40px 20px; background: transparent; box-shadow: none;">
+      <h2 style="color: #f43f5e; font-size: 26px; margin-bottom: 16px;">🛠️ 系統維護中</h2>
+      <p id="licenseLockReason" style="font-size: 16px; color: #f8fafc; white-space: pre-line; line-height: 1.6;">
+        本店目前暫停提供線上點餐服務。
+      </p>
+    </div>
+  </div>
+
+  <!-- 營業時間攔截遮罩 -->
+  <div id="closedOverlay" class="modal-overlay" style="z-index: 9999; background: rgba(20,20,20,0.92);">
+    <div class="modal-box" style="text-align: center; padding: 30px 20px;">
+      <h2 id="closedTitle" style="color: var(--primary); font-size: 24px; margin-bottom: 12px;">⏰ 休息中</h2>
+      <p id="closedMessage" style="font-size: 15px; color: #444; white-space: pre-line; line-height: 1.6;"></p>
+    </div>
+  </div>
+
+  <!-- 頂部導覽列 -->
+  <header class="header">
+    <div class="header-top">
+      <h1 class="store-title" id="headerStoreName">劉家川味牛肉麵</h1>
+      <span id="displayTableNumber" class="table-badge badge-takeout">載入桌號中...</span>
+    </div>
+    <div class="header-sub">
+      <span class="info-link" onclick="openInfoModal()">營業資訊 & 注意事項 ℹ️</span>
+      <button id="myOrdersBtn" class="my-orders-btn" onclick="showDashboardView()">
+        📋 已點清單 (<span id="myOrdersCount">0</span>單)
+      </button>
+    </div>
+  </header>
+
+  <!-- 營業資訊彈窗 -->
+  <div id="infoModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modalStoreName">劉家川味牛肉麵</h3>
+        <button class="close-btn" onclick="closeInfoModal()">✕</button>
+      </div>
+      <div style="font-size: 14px; line-height: 1.75; color: #444;">
+        <p><strong>📍 地址：</strong><span id="modalStoreAddress">台南市永康區中山北路131號</span></p>
+        <p><strong>📞 電話：</strong><span id="modalStorePhone">06-2312729</span></p>
+        <p><strong>⏰ 營業時間：</strong><span id="modalStoreHours">11:00-14:00, 17:00-20:30</span></p>
+        <hr style="margin: 12px 0; border: none; border-top: 1px dashed #ddd;">
+        <p><strong>💡 顧客須知：</strong></p>
+        <p id="modalStoreNotice" style="white-space: pre-line; color: #555; margin-top: 4px;">歡迎光臨！內用顧客請直接掃描桌號點餐，餐點現點現做請耐心等候。</p>
+        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #f0f0f0; text-align: center; color: #a0aec0; font-size: 11px;">
+          系統版本: v4.1 - 台灣手機10碼與市話防呆加固版
+        </div>
+      </div>
+    </div>
+  </div>
+<!-- [Section 3: HTML 頂部導覽與基本彈窗] End -->
+
+<!-- [Section 4: HTML 點餐區域與購物車入口] Start -->
+  <div id="menuSection">
+    <div id="categoryTabs" class="tabs"></div>
+    <div id="menuContainer" class="menu-container">
+      <p style="text-align:center; color:#888; padding: 40px 0;">⏳ 正在從雲端載入最新菜單...</p>
+    </div>
+    <!-- 菜單底部常駐版本與店名資訊 -->
+    <div style="text-align: center; padding: 18px 16px 10px; color: #a0aec0; font-size: 12px;">
+      <p id="footerStoreName" style="color: #718096; font-weight: 600;">劉家川味牛肉麵</p>
+      <p style="font-size: 11px; margin-top: 4px; color: #d32f2f; font-weight: 700;">系統版本: v4.1 - 台灣手機10碼與市話防呆加固版</p>
+    </div>
+  </div>
+
+  <!-- 底部購物車懸浮列 -->
+  <div id="cartBar" class="cart-bar">
+    <div class="cart-summary">
+      <div id="cartCount" class="cart-count">0</div>
+      <div class="cart-total">合計: $<span id="cartTotal">0</span></div>
+    </div>
+    <button class="btn-checkout" onclick="openCartModal()">檢視清單 🛒</button>
+  </div>
+<!-- [Section 4: HTML 點餐區域與購物車入口] End -->
+
+<!-- [Section 5: HTML 智慧訂單狀態儀表板] Start -->
+  <div id="orderDashboard">
+    <div class="dash-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+        <h2 style="font-size: 20px; font-weight: 800; color: #1a202c;">📋 已點清單與出餐進度</h2>
+        <button onclick="backToMenu()" style="background:#f0f4f8; color:#2b6cb0; border:1px solid #bee3f8; padding:7px 12px; border-radius:8px; font-size:13px; font-weight:bold; cursor:pointer;">
+          ← 返回菜單加點
+        </button>
+      </div>
+
+      <div style="background: #fff8e1; border: 1px solid #ffe082; border-radius: 12px; padding: 12px; margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:14px; font-weight:bold; color:#b7791f;">🔔 目前櫃台叫號進度</span>
+        <strong id="dashCurrentCompleted" style="font-size:20px; color:#d32f2f;">#100</strong>
+      </div>
+
+      <!-- 多筆訂單容器 -->
+      <div id="activeOrdersList"></div>
+
+      <!-- 整桌未結帳總額統計 -->
+      <div style="margin-top: 16px; padding-top: 14px; border-top: 2px dashed #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:15px; font-weight:bold; color:#4a5568;">本清單未結帳總計：</span>
+        <strong id="dashGrandTotal" style="font-size:22px; color:var(--primary);">$0</strong>
+      </div>
+
+      <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid #f0f0f0; text-align: center;">
+        <p style="color: #718096; font-size: 13px;" id="dashboardStoreName">劉家川味牛肉麵</p>
+        <p style="color: #d32f2f; font-size: 11px; font-weight: 700; margin-top: 4px;">系統版本: v4.1 - 台灣手機10碼與市話防呆加固版</p>
+      </div>
+    </div>
+  </div>
+<!-- [Section 5: HTML 智慧訂單狀態儀表板] End -->
+
+<!-- [Section 6: HTML 選購視窗與結帳抽屜] Start -->
+  <!-- 餐點規格選購 Modal -->
+  <div id="itemModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modalItemName">餐點名稱</h3>
+        <button class="close-btn" onclick="closeItemModal()">✕</button>
+      </div>
+      <div id="sizeGroup" class="option-group" style="display:none;">
+        <span class="option-label">選擇份量 (必選)</span>
+        <div id="sizeChips" class="chips"></div>
+      </div>
+      <div id="addonGroup" class="option-group" style="display:none;">
+        <span class="option-label">客製化調整 (可複選)</span>
+        <div id="addonChips" class="chips"></div>
+      </div>
+      <div class="qty-control">
+        <span style="font-weight:bold; font-size:14px;">購買數量</span>
+        <div style="display:flex; align-items:center; gap:14px;">
+          <button class="qty-btn" onclick="changeModalQty(-1)">−</button>
+          <strong id="modalQty" style="font-size:17px; min-width:24px; text-align:center;">1</strong>
+          <button class="qty-btn" onclick="changeModalQty(1)">+</button>
+        </div>
+      </div>
+      <button onclick="confirmAddToCart()" style="width:100%; margin-top:18px; background:var(--primary); color:white; border:none; padding:14px; border-radius:12px; font-size:16px; font-weight:800; cursor:pointer;">
+        加入購物車 ($<span id="modalItemTotal">0</span>)
+      </button>
+    </div>
+  </div>
+
+  <!-- 檢視購物車與結帳 Modal -->
+  <div id="cartModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>🛒 確認點餐明細</h3>
+        <button class="close-btn" onclick="closeCartModal()">✕</button>
+      </div>
+      <div id="cartItemsList" style="max-height: 260px; overflow-y: auto; margin-bottom: 14px;"></div>
+      <div style="display:flex; justify-content:space-between; font-size:17px; font-weight:800; margin-bottom:14px; color:var(--primary);">
+        <span>總計金額</span>
+        <span>$<span id="checkoutTotalAmount">0</span></span>
+      </div>
+
+      <!-- 外帶顧客必填資訊 -->
+      <div id="takeoutFields" style="display:none; background:#f8fafc; padding:12px; border-radius:10px; margin-bottom:12px; border:1px solid #e2e8f0;">
+        <p style="font-size:13px; font-weight:bold; color:#1565c0; margin-bottom:8px;">🛍️ 外帶取餐聯絡資訊 (必填，自動記憶免重填)</p>
+        <input type="text" id="custName" class="input-field" placeholder="您的稱呼 *必填 (例：陳先生)" oninput="document.getElementById('takeoutErrorMsg').style.display='none'">
+        <input type="tel" id="custPhone" class="input-field" style="margin-bottom:4px;" inputmode="numeric" maxlength="12" pattern="09\d{8}|\d{7}|0\d{8}" placeholder="手機10碼(09開頭) 或 市話7/9碼 *必填" oninput="this.value=this.value.replace(/[^0-9-]/g,''); document.getElementById('takeoutErrorMsg').style.display='none'">
+        <p id="takeoutErrorMsg" style="display:none; color:#d32f2f; font-size:12px; font-weight:bold; margin-top:6px;">⚠️ 請完整填寫外帶「稱呼」與「聯絡電話」！</p>
+      </div>
+
+      <textarea id="orderNote" class="input-field" rows="2" placeholder="整單備註 (例如：餐具數量、統編等...)"></textarea>
+
+      <button id="submitOrderBtn" onclick="handlePreSubmitOrder()" style="width:100%; background:var(--green); color:white; border:none; padding:14px; border-radius:12px; font-size:16px; font-weight:800; cursor:pointer;">
+        ✅ 確認送出訂單
+      </button>
+    </div>
+  </div>
+
+  <!-- 方案 C：同桌親友加點 vs 陌生人併桌 詢問彈窗 -->
+  <div id="occupiedAskModal" class="modal-overlay" style="z-index: 120;">
+    <div class="modal-box" style="text-align:center;">
+      <h3 style="color:#d32f2f; font-size:19px; margin-bottom:10px;">⚠️ 此桌位目前用餐中</h3>
+      <p style="font-size:14px; color:#555; line-height:1.6; margin-bottom:18px;">
+        系統偵測到本桌已有餐點正在製作或用餐中。<br>請問您與同桌顧客的關係是？
+      </p>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <button onclick="proceedOccupiedOrder('addon')" style="background:#2e7d32; color:white; border:none; padding:14px; border-radius:10px; font-size:15px; font-weight:bold; cursor:pointer;">
+          👉 同桌親友 (加點並合併看單)
+        </button>
+        <button onclick="proceedOccupiedOrder('share')" style="background:#1565c0; color:white; border:none; padding:14px; border-radius:10px; font-size:15px; font-weight:bold; cursor:pointer;">
+          👉 陌生人 (與人併桌・各自結帳)
+        </button>
+        <button onclick="closeOccupiedAskModal()" style="background:#eee; color:#555; border:none; padding:10px; border-radius:10px; font-size:14px; cursor:pointer;">
+          取消返回
+        </button>
+      </div>
+    </div>
+  </div>
+<!-- [Section 6: HTML 選購視窗與結帳抽屜] End -->
+
+<!-- [Section 7: JS 全域變數與初始化] Start -->
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAm2HTW9fmse5lXnzrkMyEQQYZpAzQoHD4",
+      authDomain: "liujia-689d7.firebaseapp.com",
+      projectId: "liujia-689d7",
+      storageBucket: "liujia-689d7.firebasestorage.app",
+      messagingSenderId: "376230897719",
+      appId: "1:376230897719:web:07481db92df75494d4b7b2"
+    };
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
+
+    // 全域狀態變數
+    let categories = [];
+    let menuItems = [];
+    let currentCategory = "";
+    let cart = [];
+    let currentModalItem = null;
+    let selectedSize = null;
+    let selectedAddons = [];
+    let modalQty = 1;
+
+    // 桌位與店務設定狀態
+    let rawTableIdFromUrl = null;
+    let currentCleanTableName = null; // 對應後台設定的桌名 (例: "第 3 桌")
+    let globalTableConfig = [];
+    let globalTablesStatus = {};
+    let storeSettings = null;
+    let isShareTableStranger = false; // 若客人選過併桌則記住
+
+    // 本機點過的訂單 ID 紀錄 (localStorage)
+    let myLocalOrderIds = JSON.parse(localStorage.getItem("liujia_my_orders") || "[]");
+    let activeTableOrders = []; // 當前顯示於儀表板的訂單陣列
+
+    // 台灣手機與市話格式檢查器
+    function validateTaiwanPhone(rawPhone) {
+      const cleaned = String(rawPhone || "").replace(/[-\s()]/g, "");
+      const isMobile = /^09\d{8}$/.test(cleaned); // 09開頭共 10 碼
+      const isLandline = /^\d{7}$/.test(cleaned) || /^0\d{8}$/.test(cleaned); // 7碼或含區碼9碼
+      return { valid: isMobile || isLandline, cleaned };
+    }
+
+    // URL 參數自動洗淨防呆解析
+    function parseUrlTableParam() {
+      const params = new URLSearchParams(window.location.search);
+      let rawTable = params.get("table");
+      if (rawTable) {
+        // 自動剪除不小心複製到的 Markdown 括號或網址尾巴 (例如 "3](https...")
+        let cleaned = rawTable.split(/[\]\(\s]|http/)[0].trim();
+        if (cleaned) {
+          rawTableIdFromUrl = cleaned;
+        }
+      }
+    }
+    parseUrlTableParam();
+
+    function resolveTableNameFromConfig() {
+      if (!rawTableIdFromUrl) {
+        currentCleanTableName = null;
+      } else {
+        const found = globalTableConfig.find(t => String(t.id) === String(rawTableIdFromUrl));
+        currentCleanTableName = found ? found.name : `第 ${rawTableIdFromUrl} 桌`;
+      }
+      updateHeaderTableBadge();
+    }
+
+    window.updateHeaderTableBadge = function() {
+      const badge = document.getElementById("displayTableNumber");
+      if (!badge) return;
+      if (currentCleanTableName) {
+        const isOccupied = globalTablesStatus && globalTablesStatus[currentCleanTableName] === "occupied";
+        if (isOccupied) {
+          badge.innerText = `內用 - ${currentCleanTableName} [用餐中]`;
+          badge.className = "table-badge badge-occupied";
+        } else {
+          badge.innerText = `內用 - ${currentCleanTableName}`;
+          badge.className = "table-badge badge-dinein";
+        }
+      } else {
+        badge.innerText = "外帶顧客";
+        badge.className = "table-badge badge-takeout";
+      }
+    };
+
+    function openInfoModal() { document.getElementById("infoModal").style.display = "flex"; }
+    function closeInfoModal() { document.getElementById("infoModal").style.display = "none"; }
+<!-- [Section 7: JS 全域變數與初始化] End -->
+
+<!-- [Section 8: JS 菜單渲染與選項邏輯] Start -->
+    function renderTabs() {
+      const tabContainer = document.getElementById("categoryTabs");
+      if (!categories.length) {
+        tabContainer.innerHTML = "";
+        return;
+      }
+      if (!currentCategory) currentCategory = categories[0].name;
+      tabContainer.innerHTML = categories.map(cat => `
+        <button class="tab-btn ${cat.name === currentCategory ? 'active' : ''}" onclick="selectCategory('${cat.name}')">
+          ${cat.name}
+        </button>
+      `).join('');
+    }
+
+    window.selectCategory = function(catName) {
+      currentCategory = catName;
+      renderTabs();
+      renderMenuItems();
+    };
+
+    function renderMenuItems() {
+      const container = document.getElementById("menuContainer");
+      const filtered = menuItems.filter(item => item.category_name === currentCategory);
+      if (!filtered.length) {
+        container.innerHTML = `<p style="text-align:center; color:#999; padding:30px;">此分類目前無餐點</p>`;
+        return;
+      }
+      container.innerHTML = filtered.map(item => {
+        let priceText = "";
+        if (item.type === "size") {
+          priceText = `小 $${item.price_small} / 大 $${item.price_large}`;
+        } else if (item.type === "dumpling") {
+          priceText = `每顆 $${item.price} (最少 ${item.min_qty || 10} 顆)`;
+        } else {
+          priceText = `$${item.price}`;
+        }
+        const avail = item.is_available !== false;
+        return `
+          <div class="menu-card ${avail ? '' : 'sold-out'}">
+            <div class="item-info">
+              <h3>${item.name}</h3>
+              <div class="item-price">${priceText}</div>
+            </div>
+            <button class="btn-select" ${avail ? '' : 'disabled'} onclick="openItemModal('${item.id}')">
+              ${avail ? '選購' : '已售完'}
+            </button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.openItemModal = function(itemId) {
+      const item = menuItems.find(i => i.id === itemId);
+      if (!item) return;
+      currentModalItem = item;
+      selectedAddons = [];
+      modalQty = item.type === "dumpling" ? (item.min_qty || 10) : 1;
+
+      document.getElementById("modalItemName").innerText = item.name;
+      const sizeGroup = document.getElementById("sizeGroup");
+      const sizeChips = document.getElementById("sizeChips");
+      if (item.type === "size") {
+        sizeGroup.style.display = "block";
+        selectedSize = { label: "小碗", price: Number(item.price_small) };
+        sizeChips.innerHTML = `
+          <div class="chip selected" onclick="selectSizeChip('小碗', ${item.price_small}, this)">小碗 ($${item.price_small})</div>
+          <div class="chip" onclick="selectSizeChip('大碗', ${item.price_large}, this)">大碗 ($${item.price_large})</div>
+        `;
+      } else {
+        sizeGroup.style.display = "none";
+        selectedSize = null;
+      }
+
+      const addonGroup = document.getElementById("addonGroup");
+      const addonChips = document.getElementById("addonChips");
+      if (item.addons && item.addons.length > 0) {
+        addonGroup.style.display = "block";
+        addonChips.innerHTML = item.addons.map((ad, idx) => `
+          <div class="chip" onclick="toggleAddonChip(${idx}, this)">${ad.name}</div>
+        `).join('');
+      } else {
+        addonGroup.style.display = "none";
+      }
+
+      updateModalPriceDisplay();
+      document.getElementById("itemModal").style.display = "flex";
+    };
+
+    window.closeItemModal = function() {
+      document.getElementById("itemModal").style.display = "none";
+    };
+
+    window.selectSizeChip = function(label, price, el) {
+      selectedSize = { label, price: Number(price) };
+      document.querySelectorAll("#sizeChips .chip").forEach(c => c.classList.remove("selected"));
+      el.classList.add("selected");
+      updateModalPriceDisplay();
+    };
+
+    window.toggleAddonChip = function(idx, el) {
+      const addon = currentModalItem.addons[idx];
+      const existsIdx = selectedAddons.findIndex(a => a.name === addon.name);
+      if (existsIdx > -1) {
+        selectedAddons.splice(existsIdx, 1);
+        el.classList.remove("selected");
+      } else {
+        selectedAddons.push(addon);
+        el.classList.add("selected");
+      }
+      updateModalPriceDisplay();
+    };
+
+    window.changeModalQty = function(delta) {
+      const min = currentModalItem.type === "dumpling" ? (currentModalItem.min_qty || 10) : 1;
+      let next = modalQty + delta;
+      if (next < min) next = min;
+      modalQty = next;
+      updateModalPriceDisplay();
+    };
+
+    function updateModalPriceDisplay() {
+      document.getElementById("modalQty").innerText = modalQty;
+      let basePrice = currentModalItem.type === "size" ? selectedSize.price : Number(currentModalItem.price);
+      let addonPrice = selectedAddons.reduce((sum, a) => sum + Number(a.price || 0), 0);
+      let total = Math.round((basePrice + addonPrice) * modalQty);
+      document.getElementById("modalItemTotal").innerText = total;
+    }
+<!-- [Section 8: JS 菜單渲染與選項邏輯] End -->
+
+<!-- [Section 9: JS 購物車與送單邏輯] Start -->
+    window.confirmAddToCart = function() {
+      let basePrice = currentModalItem.type === "size" ? selectedSize.price : Number(currentModalItem.price);
+      let addonPrice = selectedAddons.reduce((sum, a) => sum + Number(a.price || 0), 0);
+      let unitPrice = basePrice + addonPrice;
+      let subtotal = Math.round(unitPrice * modalQty);
+
+      let specParts = [];
+      if (selectedSize) specParts.push(selectedSize.label);
+      if (selectedAddons.length) specParts.push(selectedAddons.map(a => a.name).join(", "));
+
+      cart.push({
+        item_id: currentModalItem.id,
+        name: currentModalItem.name,
+        spec: specParts.join(" / "),
+        qty: modalQty,
+        unit_price: unitPrice,
+        subtotal: subtotal
+      });
+
+      closeItemModal();
+      updateCartUI();
+    };
+
+    function updateCartUI() {
+      const bar = document.getElementById("cartBar");
+      if (cart.length === 0) {
+        bar.style.display = "none";
+        return;
+      }
+      bar.style.display = "flex";
+      const totalCount = cart.reduce((s, i) => s + (i.qty >= 10 ? 1 : i.qty), 0);
+      const totalAmount = cart.reduce((s, i) => s + i.subtotal, 0);
+      document.getElementById("cartCount").innerText = cart.length;
+      document.getElementById("cartTotal").innerText = totalAmount;
+    }
+
+    window.openCartModal = function() {
+      renderCartItemsList();
+      const isTakeout = !currentCleanTableName;
+      document.getElementById("takeoutFields").style.display = isTakeout ? "block" : "none";
+      const errEl = document.getElementById("takeoutErrorMsg");
+      if (errEl) errEl.style.display = "none";
+
+      if (isTakeout) {
+        const nameInput = document.getElementById("custName");
+        const phoneInput = document.getElementById("custPhone");
+        if (!nameInput.value.trim()) {
+          nameInput.value = localStorage.getItem("liujia_cust_name") || "";
+        }
+        if (!phoneInput.value.trim()) {
+          const savedPhone = localStorage.getItem("liujia_cust_phone") || "";
+          // 自動過濾掉舊版曾誤存的不合格電話 (例如 222 或 888)
+          if (validateTaiwanPhone(savedPhone).valid) {
+            phoneInput.value = savedPhone;
+          } else {
+            localStorage.removeItem("liujia_cust_phone");
+            phoneInput.value = "";
+          }
+        }
+      }
+      document.getElementById("cartModal").style.display = "flex";
+    };
+
+    window.closeCartModal = function() {
+      document.getElementById("cartModal").style.display = "none";
+    };
+
+    function renderCartItemsList() {
+      const list = document.getElementById("cartItemsList");
+      if (!cart.length) {
+        list.innerHTML = "<p style='text-align:center;color:#888;'>購物車是空的</p>";
+        document.getElementById("checkoutTotalAmount").innerText = "0";
+        return;
+      }
+      list.innerHTML = cart.map((c, idx) => `
+        <div class="cart-item-row">
+          <div>
+            <div style="font-weight:700; font-size:15px;">${c.name} <span style="color:var(--primary);">x${c.qty}</span></div>
+            ${c.spec ? `<div style="font-size:12px; color:#777;">${c.spec}</div>` : ''}
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <strong style="font-size:15px;">$${c.subtotal}</strong>
+            <button onclick="removeCartItem(${idx})" style="background:#ffebee; color:#d32f2f; border:none; padding:4px 8px; border-radius:6px; cursor:pointer; font-size:12px;">刪除</button>
+          </div>
+        </div>
+      `).join('');
+      const totalAmount = cart.reduce((s, i) => s + i.subtotal, 0);
+      document.getElementById("checkoutTotalAmount").innerText = totalAmount;
+    }
+
+    window.removeCartItem = function(idx) {
+      cart.splice(idx, 1);
+      updateCartUI();
+      if (cart.length === 0) closeCartModal();
+      else renderCartItemsList();
+    };
+
+    // 送出前檢查桌況 (方案 C 詢問加點或併桌) 與外帶必填驗證
+    window.handlePreSubmitOrder = function() {
+      if (!cart.length) return;
+      if (!currentCleanTableName) {
+        const cname = document.getElementById("custName").value.trim();
+        const cphone = document.getElementById("custPhone").value.trim();
+        const errEl = document.getElementById("takeoutErrorMsg");
+
+        if (!cname) {
+          if (errEl) {
+            errEl.innerText = "⚠️ 請填寫您的「稱呼」(例：陳先生)！";
+            errEl.style.display = "block";
+          }
+          document.getElementById("custName").focus();
+          return;
+        }
+        if (!cphone) {
+          if (errEl) {
+            errEl.innerText = "⚠️ 外帶點餐請務必填寫「聯絡電話」，方便餐點完成時通知您！";
+            errEl.style.display = "block";
+          }
+          document.getElementById("custPhone").focus();
+          return;
+        }
+        const phoneCheck = validateTaiwanPhone(cphone);
+        if (!phoneCheck.valid) {
+          if (errEl) {
+            errEl.innerText = "📞 電話格式不正確！請輸入台灣手機 10 碼 (09開頭) 或市話 7/9 碼數字。";
+            errEl.style.display = "block";
+          }
+          document.getElementById("custPhone").focus();
+          return;
+        }
+        document.getElementById("custPhone").value = phoneCheck.cleaned;
+        // 自動記憶老顧客稱呼與電話至本機 localStorage
+        localStorage.setItem("liujia_cust_name", cname);
+        localStorage.setItem("liujia_cust_phone", phoneCheck.cleaned);
+
+        submitOrderToFirebase("");
+        return;
+      }
+
+      const isOccupied = globalTablesStatus && globalTablesStatus[currentCleanTableName] === "occupied";
+      if (isOccupied) {
+        document.getElementById("occupiedAskModal").style.display = "flex";
+      } else {
+        submitOrderToFirebase("");
+      }
+    };
+
+    window.closeOccupiedAskModal = function() {
+      document.getElementById("occupiedAskModal").style.display = "none";
+    };
+
+    window.proceedOccupiedOrder = function(mode) {
+      closeOccupiedAskModal();
+      if (mode === "addon") {
+        isShareTableStranger = false;
+        submitOrderToFirebase("(加單)");
+      } else {
+        isShareTableStranger = true;
+        submitOrderToFirebase("(併桌)");
+      }
+    };
+
+    async function submitOrderToFirebase(tagSuffix) {
+      const btn = document.getElementById("submitOrderBtn");
+      const totalAmount = cart.reduce((s, i) => s + i.subtotal, 0);
+      const note = document.getElementById("orderNote").value.trim();
+      const custName = currentCleanTableName ? "" : document.getElementById("custName").value.trim();
+      let custPhone = currentCleanTableName ? "" : document.getElementById("custPhone").value.trim();
+
+      // 第二道雙重硬鎖：送入 Firebase 前再次強制驗證外帶電話格式，不合規直接阻斷
+      if (!currentCleanTableName) {
+        const finalCheck = validateTaiwanPhone(custPhone);
+        if (!custName || !finalCheck.valid) {
+          const errEl = document.getElementById("takeoutErrorMsg");
+          if (errEl) {
+            errEl.innerText = "📞 攔截送單：外帶必須填寫稱呼與正確電話（手機 09 開頭 10 碼，或市話 7/9 碼）！";
+            errEl.style.display = "block";
+          }
+          return;
+        }
+        custPhone = finalCheck.cleaned;
+      }
+
+      btn.disabled = true;
+      btn.innerText = "⏳ 傳送訂單中...";
+
+      let finalTableString = "外帶顧客";
+      if (currentCleanTableName) {
+        finalTableString = tagSuffix ? `內用 - ${currentCleanTableName} ${tagSuffix}` : `內用 - ${currentCleanTableName}`;
+      }
+
+      try {
+        const todayRef = db.collection("system_status").doc("today");
+        const tablesRef = db.collection("system_status").doc("tables");
+        const newOrderRef = db.collection("orders").doc();
+
+        await db.runTransaction(async (transaction) => {
+          const todayDoc = await transaction.get(todayRef);
+          let nextNum = 101;
+          if (todayDoc.exists) {
+            nextNum = (todayDoc.data().last_queue_number || 100) + 1;
+          }
+
+          transaction.set(todayRef, { last_queue_number: nextNum }, { merge: true });
+          if (currentCleanTableName) {
+            transaction.set(tablesRef, { [currentCleanTableName]: "occupied" }, { merge: true });
+          }
+
+          transaction.set(newOrderRef, {
+            queue_number: nextNum,
+            table_number: finalTableString,
+            customer_name: custName,
+            customer_phone: custPhone,
+            note: note,
+            items: cart,
+            total_amount: totalAmount,
+            status: "pending",
+            is_paid: false,
+            created_at: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        });
+
+        // 紀錄至本機訂單清單
+        if (!myLocalOrderIds.includes(newOrderRef.id)) {
+          myLocalOrderIds.push(newOrderRef.id);
+          localStorage.setItem("liujia_my_orders", JSON.stringify(myLocalOrderIds));
+        }
+
+        cart = [];
+        document.getElementById("orderNote").value = "";
+        updateCartUI();
+        closeCartModal();
+        showDashboardView();
+      } catch (err) {
+        console.error("送單失敗:", err);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "✅ 確認送出訂單";
+      }
+    }
+<!-- [Section 9: JS 購物車與送單邏輯] End -->
+
+<!-- [Section 10: JS Firebase 監聽與還原] Start -->
+    function checkStoreOpenStatus() {
+      const overlay = document.getElementById("closedOverlay");
+      if (!storeSettings || !overlay) return;
+
+      // 1. 檢查手動開啟之店休開關 (支援自訂國定假日、提早售完、臨時店休文案)
+      if (storeSettings.manual_close) {
+        document.getElementById("closedTitle").innerText = storeSettings.close_title || "🛑 暫停營業中";
+        document.getElementById("closedMessage").innerText = storeSettings.close_reason || "抱歉，本店目前暫停接單，感謝您的體諒！";
+        overlay.style.display = "flex";
+        return;
+      }
+
+      const now = new Date();
+      const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+      // 2. 檢查是否為預排之「特定國定假日 / 特休日期」
+      if (Array.isArray(storeSettings.special_holidays)) {
+        const matchedHoliday = storeSettings.special_holidays.find(h => h.date === todayDateStr);
+        if (matchedHoliday) {
+          document.getElementById("closedTitle").innerText = "🎉 國定假日 / 特定公休";
+          document.getElementById("closedMessage").innerText = `【今日公休公告】\n${matchedHoliday.note || '本店今日適逢國定假日公休一天，期待下次為您服務！'}`;
+          overlay.style.display = "flex";
+          return;
+        }
+      }
+
+      // 3. 檢查每週固定公休日
+      const day = now.getDay();
+      if (Array.isArray(storeSettings.closed_days) && storeSettings.closed_days.includes(day)) {
+        document.getElementById("closedTitle").innerText = "📅 今日固定公休";
+        document.getElementById("closedMessage").innerText = "本店今日為每週固定公休日，期待下次為您服務！";
+        overlay.style.display = "flex";
+        return;
+      }
+
+      const curMins = now.getHours() * 60 + now.getMinutes();
+      let isOpen = false;
+      const hoursArr = storeSettings.hours || ["11:00-14:00", "17:00-20:30"];
+      for (const range of hoursArr) {
+        const [s, e] = range.split("-");
+        if (s && e) {
+          const [sh, sm] = s.split(":").map(Number);
+          const [eh, em] = e.split(":").map(Number);
+          if (curMins >= sh * 60 + sm && curMins <= eh * 60 + em) {
+            isOpen = true;
+            break;
+          }
+        }
+      }
+
+      if (!isOpen) {
+        document.getElementById("closedTitle").innerText = "⏰ 非營業時間";
+        document.getElementById("closedMessage").innerText = `本店目前非營業時間。\n\n【今日營業時段】\n${hoursArr.join('\n')}`;
+        overlay.style.display = "flex";
+        return;
+      }
+      overlay.style.display = "none";
+    }
+
+    window.showDashboardView = function() {
+      document.getElementById("menuSection").style.display = "none";
+      document.getElementById("orderDashboard").style.display = "block";
+    };
+
+    window.backToMenu = function() {
+      document.getElementById("orderDashboard").style.display = "none";
+      document.getElementById("menuSection").style.display = "block";
+    };
+
+    // 退回修改未出餐之本機訂單
+    window.recallOrderToModify = async function(orderId) {
+      const ord = activeTableOrders.find(o => o.id === orderId);
+      if (!ord || ord.status !== "pending" || ord.is_paid) return;
+      try {
+        await db.collection("orders").doc(orderId).update({ status: "cancelled" });
+        cart = [...ord.items];
+        document.getElementById("orderNote").value = ord.note || "";
+        updateCartUI();
+        backToMenu();
+        openCartModal();
+      } catch (e) {
+        console.error("退回訂單失敗:", e);
+      }
+    };
+
+    function renderActiveOrdersDashboard() {
+      const btn = document.getElementById("myOrdersBtn");
+      const countSpan = document.getElementById("myOrdersCount");
+      const listEl = document.getElementById("activeOrdersList");
+      const grandEl = document.getElementById("dashGrandTotal");
+
+      if (activeTableOrders.length === 0) {
+        btn.style.display = "none";
+        listEl.innerHTML = `<p style="text-align:center; color:#888; padding:20px;">目前沒有進行中的未結帳訂單</p>`;
+        grandEl.innerText = "$0";
+        return;
+      }
+
+      btn.style.display = "inline-flex";
+      countSpan.innerText = activeTableOrders.length;
+
+      let grandTotal = 0;
+      listEl.innerHTML = activeTableOrders.map(ord => {
+        if (!ord.is_paid) grandTotal += Number(ord.total_amount || 0);
+        const isMine = myLocalOrderIds.includes(ord.id);
+        let statusBadge = `<span style="background:#fff3e0; color:#e65100; padding:4px 8px; border-radius:6px; font-size:12px; font-weight:bold;">🔥 廚房製作中</span>`;
+        if (ord.status === "completed") {
+          statusBadge = `<span style="background:#e8f5e9; color:#2e7d32; padding:4px 8px; border-radius:6px; font-size:12px; font-weight:bold;">✅ 已出餐完畢</span>`;
+        }
+        const paidBadge = ord.is_paid
+          ? `<span style="background:#e8f5e9; color:#2e7d32; padding:3px 8px; border-radius:6px; font-size:12px; font-weight:bold; margin-left:6px;">💰 已結帳</span>`
+          : `<span style="background:#ffebee; color:#c62828; padding:3px 8px; border-radius:6px; font-size:12px; font-weight:bold; margin-left:6px;">未結帳</span>`;
+
+        const itemsHtml = (ord.items || []).map(it => `
+          <div style="display:flex; justify-content:space-between; font-size:14px; padding:4px 0; color:#333;">
+            <span>• ${it.name} ${it.spec ? `<small style="color:#777;">(${it.spec})</small>` : ''} <strong>x${it.qty}</strong></span>
+            <span>$${it.subtotal}</span>
+          </div>
+        `).join('');
+
+        const canRecall = isMine && ord.status === "pending" && !ord.is_paid;
+
+        return `
+          <div style="border:1px solid #e2e8f0; border-radius:12px; padding:14px; margin-bottom:12px; background:#fcfcfc;">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:8px;">
+              <div>
+                <strong style="font-size:17px; color:var(--primary);">#${ord.queue_number}</strong>
+                <span style="font-size:13px; color:#555; margin-left:6px;">${ord.table_number}${ord.customer_name ? ` (${ord.customer_name}${ord.customer_phone ? ' / ' + ord.customer_phone : ''})` : ''}</span>
+                ${isMine ? `<span style="font-size:11px; background:#edf2f7; color:#4a5568; padding:2px 6px; border-radius:4px; margin-left:4px;">本機點選</span>` : ''}
+              </div>
+              <div>${statusBadge}${paidBadge}</div>
+            </div>
+            <div>${itemsHtml}</div>
+            ${ord.note ? `<div style="font-size:12px; color:#b7791f; margin-top:6px;">備註：${ord.note}</div>` : ''}
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding-top:8px; border-top:1px dashed #eee;">
+              <strong style="font-size:15px;">單筆小計：$${ord.total_amount}</strong>
+              ${canRecall ? `<button onclick="recallOrderToModify('${ord.id}')" style="background:#fff; color:#d32f2f; border:1px solid #d32f2f; padding:5px 10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">✏️ 退回修改此單</button>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      grandEl.innerText = `$${grandTotal}`;
+    }
+
+    function initRealtimeListeners() {
+      // 1. 監聽店家基本資訊與營業時間
+      db.collection("system_settings").doc("store_info").onSnapshot(doc => {
+        if (doc.exists) {
+          storeSettings = doc.data();
+          const sName = storeSettings.store_name || "劉家川味牛肉麵";
+          document.getElementById("pageTitle").innerText = `${sName} - 線上點餐`;
+          document.getElementById("headerStoreName").innerText = sName;
+          document.getElementById("modalStoreName").innerText = sName;
+          document.getElementById("dashboardStoreName").innerText = sName;
+          const footerStoreEl = document.getElementById("footerStoreName");
+          if (footerStoreEl) footerStoreEl.innerText = sName;
+          document.getElementById("modalStoreAddress").innerText = storeSettings.store_address || "未設定地址";
+          document.getElementById("modalStorePhone").innerText = storeSettings.store_phone || "未設定電話";
+          document.getElementById("modalStoreHours").innerText = (storeSettings.hours || []).join(", ");
+          document.getElementById("modalStoreNotice").innerText = storeSettings.store_notice || "歡迎光臨！餐點現點現做請耐心等候。";
+          checkStoreOpenStatus();
+        }
+      });
+      setInterval(checkStoreOpenStatus, 30000);
+
+      // 2. 監聽桌位設定與狀態
+      db.collection("system_settings").doc("tables_config").onSnapshot(doc => {
+        if (doc.exists) {
+          globalTableConfig = doc.data().tables || [];
+        }
+        resolveTableNameFromConfig();
+      });
+
+      db.collection("system_status").doc("tables").onSnapshot(doc => {
+        if (doc.exists) {
+          globalTablesStatus = doc.data() || {};
+          updateHeaderTableBadge();
+        }
+      });
+
+      // 3. 監聽叫號進度
+      db.collection("system_status").doc("today").onSnapshot(doc => {
+        if (doc.exists) {
+          document.getElementById("dashCurrentCompleted").innerText = `#${doc.data().current_completed_number || 100}`;
+        }
+      });
+
+      // 4. 監聽菜單分類與品項
+      db.collection("menu_categories").orderBy("sort_order").onSnapshot(snap => {
+        categories = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.is_active !== false);
+        renderTabs();
+        renderMenuItems();
+      });
+
+      db.collection("menu_items").onSnapshot(snap => {
+        menuItems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderMenuItems();
+      });
+
+      // 5. 方案 B：監聽進行中訂單（支援同桌親友共享帳單 + 自動隔離陌生併桌）
+      db.collection("orders").where("status", "in", ["pending", "completed"]).onSnapshot(snap => {
+        // 僅保留「待製作 (pending)」或「已出餐但未付款 (completed && !is_paid)」之進行中訂單
+        const allActive = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(o => o.status === "pending" || (o.status === "completed" && !o.is_paid));
+
+        // 檢查本機是否有點過「併桌」單
+        const myActiveOrders = allActive.filter(o => myLocalOrderIds.includes(o.id));
+        const iAmStranger = myActiveOrders.some(o => String(o.table_number).includes("(併桌)")) || isShareTableStranger;
+
+        if (!currentCleanTableName || iAmStranger) {
+          // 外帶顧客或併桌陌生人：只顯示本機點選的訂單
+          activeTableOrders = myActiveOrders;
+        } else {
+          // 內用同桌親友：自動抓取同桌之「主單 + (加單)」，但排除他人之「(併桌)」
+          const basePrefix = `內用 - ${currentCleanTableName}`;
+          activeTableOrders = allActive.filter(o => {
+            const tStr = String(o.table_number || "");
+            if (myLocalOrderIds.includes(o.id)) return true;
+            if (tStr === basePrefix || tStr === `${basePrefix} (加單)`) return true;
+            return false;
+          });
+        }
+
+        activeTableOrders.sort((a, b) => (a.queue_number || 0) - (b.queue_number || 0));
+        renderActiveOrdersDashboard();
+      });
+
+      // 6. 監聽系統總授權開關 (連動總部停權鎖定)
+      db.collection("system_settings").doc("license").onSnapshot(doc => {
+        const overlay = document.getElementById("licenseLockOverlay");
+        if (doc.exists) {
+          const d = doc.data();
+          const isActive = d.license_active !== false;
+          if (!isActive) {
+            document.getElementById("licenseLockReason").innerText = d.lock_reason || "本店目前暫停提供線上點餐服務。";
+            overlay.style.display = "flex";
+          } else {
+            overlay.style.display = "none";
+          }
+        } else {
+          overlay.style.display = "none";
+        }
+      });
+    }
+
+    window.addEventListener("DOMContentLoaded", initRealtimeListeners);
+  </script>
+</body>
+</html>
+<!-- [Section 10: JS Firebase 監聽與還原] End -->
