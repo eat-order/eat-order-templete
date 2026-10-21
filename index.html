@@ -17,14 +17,14 @@
 <!-- [Section 2: CSS 樣式設定] Start -->
   <style>
     :root {
-      --primary: #d32f2f;
-      --primary-light: #ffebee;
+      --primary: #00695c;
+      --primary-light: #e0f2f1;
       --bg: #f7f8fa;
       --card: #ffffff;
       --text: #2c3e50;
       --sub: #7f8c8d;
       --border: #edf2f7;
-      --green: #2e7d32;
+      --green: #00695c;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     body {
@@ -64,7 +64,7 @@
       white-space: nowrap;
       flex-shrink: 0;
     }
-    .badge-dinein { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+    .badge-dinein { background: #e0f2f1; color: #00695c; border: 1px solid #80cbc4; }
     .badge-occupied { background: #fff8e1; color: #f57f17; border: 1px solid #ffe082; }
     .badge-takeout { background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; }
 
@@ -92,7 +92,7 @@
       font-size: 13px;
       font-weight: bold;
       cursor: pointer;
-      box-shadow: 0 2px 6px rgba(211,47,47,0.3);
+      box-shadow: 0 2px 6px rgba(0,105,92,0.3);
       display: none;
       align-items: center;
       gap: 4px;
@@ -356,7 +356,7 @@
         <p><strong>💡 顧客須知：</strong></p>
         <p id="modalStoreNotice" style="white-space: pre-line; color: #555; margin-top: 4px;">歡迎光臨！內用顧客請直接掃描桌號點餐，餐點現點現做請耐心等候。</p>
         <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #f0f0f0; text-align: center; color: #a0aec0; font-size: 11px;">
-          系統版本: v4.1 - 台灣手機10碼與市話防呆加固版
+          v4.2.0
         </div>
       </div>
     </div>
@@ -372,7 +372,7 @@
     <!-- 菜單底部常駐版本與店名資訊 -->
     <div style="text-align: center; padding: 18px 16px 10px; color: #a0aec0; font-size: 12px;">
       <p id="footerStoreName" style="color: #718096; font-weight: 600;">店家資訊載入中…</p>
-      <p style="font-size: 11px; margin-top: 4px; color: #d32f2f; font-weight: 700;">系統版本: v4.1 - 台灣手機10碼與市話防呆加固版</p>
+      <p style="font-size: 11px; margin-top: 4px; color: var(--primary); font-weight: 700;">v4.2.0</p>
     </div>
   </div>
 
@@ -391,14 +391,14 @@
     <div class="dash-card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
         <h2 style="font-size: 20px; font-weight: 800; color: #1a202c;">📋 已點清單與出餐進度</h2>
-        <button onclick="backToMenu()" style="background:#f0f4f8; color:#2b6cb0; border:1px solid #bee3f8; padding:7px 12px; border-radius:8px; font-size:13px; font-weight:bold; cursor:pointer;">
+        <button onclick="backToMenu()" style="background:#e0f2f1; color:#00695c; border:1px solid #80cbc4; padding:7px 12px; border-radius:8px; font-size:13px; font-weight:bold; cursor:pointer;">
           ← 返回菜單加點
         </button>
       </div>
 
       <div style="background: #fff8e1; border: 1px solid #ffe082; border-radius: 12px; padding: 12px; margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center;">
         <span style="font-size:14px; font-weight:bold; color:#b7791f;">🔔 目前櫃台叫號進度</span>
-        <strong id="dashCurrentCompleted" style="font-size:20px; color:#d32f2f;">#100</strong>
+        <strong id="dashCurrentCompleted" style="font-size:20px; color:var(--primary);">#100</strong>
       </div>
 
       <!-- 多筆訂單容器 -->
@@ -412,7 +412,7 @@
 
       <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid #f0f0f0; text-align: center;">
         <p style="color: #718096; font-size: 13px;" id="dashboardStoreName">店家資訊載入中…</p>
-        <p style="color: #d32f2f; font-size: 11px; font-weight: 700; margin-top: 4px;">系統版本: v4.1 - 台灣手機10碼與市話防呆加固版</p>
+        <p style="color: var(--primary); font-size: 11px; font-weight: 700; margin-top: 4px;">v4.2.0</p>
       </div>
     </div>
   </div>
@@ -485,10 +485,10 @@
         系統偵測到本桌已有餐點正在製作或用餐中。<br>請問您與同桌顧客的關係是？
       </p>
       <div style="display:flex; flex-direction:column; gap:10px;">
-        <button onclick="proceedOccupiedOrder('addon')" style="background:#2e7d32; color:white; border:none; padding:14px; border-radius:10px; font-size:15px; font-weight:bold; cursor:pointer;">
+        <button onclick="proceedOccupiedOrder('addon')" style="background:var(--primary); color:white; border:none; padding:14px; border-radius:10px; font-size:15px; font-weight:bold; cursor:pointer;">
           👉 同桌親友 (加點並合併看單)
         </button>
-        <button onclick="proceedOccupiedOrder('share')" style="background:#1565c0; color:white; border:none; padding:14px; border-radius:10px; font-size:15px; font-weight:bold; cursor:pointer;">
+        <button onclick="proceedOccupiedOrder('share')" style="background:var(--primary); color:white; border:none; padding:14px; border-radius:10px; font-size:15px; font-weight:bold; cursor:pointer;">
           👉 陌生人 (與人併桌・各自結帳)
         </button>
         <button onclick="closeOccupiedAskModal()" style="background:#eee; color:#555; border:none; padding:10px; border-radius:10px; font-size:14px; cursor:pointer;">
