@@ -556,7 +556,10 @@
     <div class="settings-card">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:14px;">
         <h3 style="border:none; padding:0; margin:0;">📂 菜單分類管理</h3>
-        <button class="btn" style="background:#4f46e5; color:#fff;" onclick="importDefaultMenuTemplate()">📥 一鍵載入公版範本菜單 (含冷飲類)</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn" style="background:#e11d48; color:#fff;" onclick="importDefaultMenuTemplate(true)">🔄 覆蓋重灌公版菜單 (清空舊菜＋帶入店名設定)</button>
+          <button class="btn" style="background:#4f46e5; color:#fff;" onclick="importDefaultMenuTemplate(false)">➕ 僅補齊缺少的公版菜色</button>
+        </div>
       </div>
       <div style="display:flex; gap:8px; margin-bottom:12px;">
         <input type="text" id="newCatNameInput" class="input-field" style="margin:0; max-width:260px;" placeholder="輸入新分類名稱 (例：清涼冷飲)">
@@ -715,7 +718,7 @@
     <div style="margin-top: 22px; background: #fff1f2; border: 1px solid #fecdd3; padding: 20px; border-radius: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
       <div>
         <h4 style="color: #be123c; font-size: 16px; margin-bottom: 4px;">🔄 每日營業號碼歸零與全桌位清空</h4>
-        <p style="font-size: 13px; color: #9f1239;">請於每日開店前或打烊後點擊。這將會把取號機重置為 #100 號（下一單從 #101 開始），並將所有內用桌位恢復為「空閒」狀態。</p>
+        <p style="font-size: 13px; color: #9f1239;">請於每日開店前或打烊後點擊。這將會把取號機重置為 #100 號（下一單從 #101 開始），並將所有內用桌位恢復為 "空閒" 狀態。</p>
       </div>
       <button class="btn btn-primary" style="background:#e11d48;" onclick="triggerDailyReset()">🔄 執行每日號碼歸零與清桌</button>
     </div>
@@ -724,7 +727,11 @@
 
 <!-- [Section 6: JS 系統變數與共用函式] Start -->
   <script>
-    // 優先讀取外部獨立設定檔 (firebaseConfig.js)，若未載入則使用內建預設值防呆
+    // 嚴格防呆檢查：確保 firebaseConfig.js 成功載入
+    if (!window.FIREBASE_CONFIG) {
+      alert("⚠️ 嚴重錯誤：找不到 firebaseConfig.js 設定檔！請將 firebaseConfig.js 與 admin.html 放在同一個目錄下。");
+    }
+
     const firebaseConfig = window.FIREBASE_CONFIG || {
       apiKey: "AIzaSyAm2HTW9fmse5lXnzrkMyEQQYZpAzQoHD4",
       authDomain: "liujia-689d7.firebaseapp.com",
@@ -733,6 +740,7 @@
       messagingSenderId: "376230897719",
       appId: "1:376230897719:web:07481db92df75494d4b7b2"
     };
+
     if (!firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
     }
@@ -746,7 +754,7 @@
     let adminMenuItems = [];
     let globalTableConfig = [];
     let storeInfoData = {};
-    let cloudAdminPin = "1111";
+    let cloudAdminPin = "1111"; // 預設安全備用密碼
 
     // 總部 Feature Flags 授權狀態
     let licenseFlags = {
@@ -853,9 +861,13 @@
             cloudAdminPin = String(data.pin || "1111");
           }
         } else {
+          // 若雲端尚無 admin 文件，自動初始化一筆預設 1111
           db.collection("system_settings").doc("admin").set({ pin: "1111", force_reset_pin: false }, { merge: true });
           cloudAdminPin = "1111";
         }
+      }, err => {
+        console.warn("監聽 admin 密碼失敗，使用預設密碼 1111:", err);
+        cloudAdminPin = "1111";
       });
 
       // 2. 監聽總部 License、三大進階付費開關與首次裝置綁定鎖
@@ -893,6 +905,8 @@
             document.getElementById("deviceActivationOverlay").style.display = "flex";
           }
         }
+      }, err => {
+        console.warn("監聽 license 失敗:", err);
       });
 
       // 3. 監聽店家基本資訊與桌位設定
@@ -904,6 +918,8 @@
           document.getElementById("loginStoreTitle").innerText = `${sName} 後台`;
           populateStoreSettingsForm();
         }
+      }, err => {
+        console.warn("監聽 store_info 失敗:", err);
       });
 
       db.collection("system_settings").doc("tables_config").onSnapshot(doc => {
@@ -917,6 +933,8 @@
           ];
         }
         renderTablesConfigList();
+      }, err => {
+        console.warn("監聽 tables_config 失敗:", err);
       });
     }
 
@@ -950,12 +968,17 @@
 
     window.verifyPin = function() {
       const input = document.getElementById("pinInput").value.trim();
-      if (input === cloudAdminPin) {
+      // 比對雲端取得的密碼，若雲端尚未同步完成則預設比對 1111
+      const activePin = String(cloudAdminPin || "1111");
+      if (input === activePin) {
         document.getElementById("loginOverlay").style.display = "none";
         startListeningOrders();
         startListeningMenu();
+        showToast("🔓 成功登入後台！");
       } else {
         showToast("❌ 密碼錯誤，請重新輸入！");
+        document.getElementById("pinInput").value = "";
+        document.getElementById("pinInput").focus();
       }
     };
 
@@ -1704,8 +1727,8 @@
       });
     };
 
-    // 任務 2：新店一鍵載入公版範本菜單 (讀取同目錄下的外部 defaultMenu.js)
-    window.importDefaultMenuTemplate = function() {
+    // 任務 2：新店一鍵載入公版範本菜單 (支援「覆蓋重灌清空舊菜」與「自動帶入店家資訊」)
+    window.importDefaultMenuTemplate = function(isOverwrite = true) {
       const tpl = window.DEFAULT_MENU_TEMPLATE;
       if (!tpl || !Array.isArray(tpl.categories) || !Array.isArray(tpl.items)) {
         showToast("⚠️ 找不到公版菜單檔 (defaultMenu.js)！請確認已將 defaultMenu.js 放在相同目錄下。");
@@ -1715,25 +1738,61 @@
 
       const templateCats = tpl.categories;
       const templateItems = tpl.items;
+      const tplStore = tpl.store_info || null;
+      const storeTitleHint = tplStore && tplStore.store_name ? `【${tplStore.store_name}】` : "";
 
-      openConfirm(`確定要載入「defaultMenu.js 公版預設菜單」嗎？\n這會自動補齊 ${templateCats.length} 大分類與 ${templateItems.length} 道餐點，不會影響現有訂單。`, async (yes) => {
+      const confirmMsg = isOverwrite
+        ? `⚠️ 確定要執行「覆蓋重灌公版菜單」嗎？\n\n1. 這將會【徹底刪除並清空】目前資料庫中所有的舊分類與舊菜色！\n2. 接著寫入 defaultMenu.js ${storeTitleHint} 的 ${templateCats.length} 大分類與 ${templateItems.length} 道新餐點。\n${tplStore ? '3. 同步自動更新店名、電話、地址、營業時間與公休日設定。\n' : ''}(註：歷史訂單與營收報表不會受影響)`
+        : `確定要執行「僅補齊缺少的公版菜色」嗎？\n這會保留現有菜單，僅將 defaultMenu.js ${storeTitleHint} 中尚未出現的分類與餐點補齊。`;
+
+      openConfirm(confirmMsg, async (yes) => {
         if (!yes) return;
         try {
           const batch = db.batch();
-          templateCats.forEach(c => {
-            if (!adminCategories.some(ec => ec.name === c.name)) {
+
+          if (isOverwrite) {
+            // 1. 先將現有所有舊分類與舊菜色排入刪除佇列
+            adminCategories.forEach(oldCat => {
+              batch.delete(db.collection("menu_categories").doc(oldCat.id));
+            });
+            adminMenuItems.forEach(oldItem => {
+              batch.delete(db.collection("menu_items").doc(oldItem.id));
+            });
+
+            // 2. 寫入全新分類與全新菜色
+            templateCats.forEach(c => {
               batch.set(db.collection("menu_categories").doc(), c);
-            }
-          });
-          templateItems.forEach(it => {
-            if (!adminMenuItems.some(ei => ei.name === it.name)) {
+            });
+            templateItems.forEach(it => {
               batch.set(db.collection("menu_items").doc(), it);
+            });
+
+            // 3. 若 defaultMenu.js 含有 store_info，一併自動更新店名、電話、地址與營業時間
+            if (tplStore) {
+              batch.set(db.collection("system_settings").doc("store_info"), tplStore, { merge: true });
             }
-          });
+          } else {
+            // 附加模式：僅補齊沒有同名之分類與餐點
+            templateCats.forEach(c => {
+              if (!adminCategories.some(ec => ec.name === c.name)) {
+                batch.set(db.collection("menu_categories").doc(), c);
+              }
+            });
+            templateItems.forEach(it => {
+              if (!adminMenuItems.some(ei => ei.name === it.name)) {
+                batch.set(db.collection("menu_items").doc(), it);
+              }
+            });
+          }
+
           await batch.commit();
-          showToast("🎉 公版範本菜單已成功從 defaultMenu.js 匯入！");
+          showToast(isOverwrite
+            ? `🎉 已徹底清空舊菜單，並成功換上${storeTitleHint}全新菜單與店務設定！`
+            : `🎉 已成功補齊${storeTitleHint}缺少的公版菜色！`
+          );
         } catch (e) {
-          showToast("匯入失敗，請檢查網路");
+          console.error("匯入菜單失敗:", e);
+          showToast("匯入失敗，請檢查網路連線");
         }
       });
     };
@@ -2047,7 +2106,7 @@
         const card = document.createElement("div");
         card.style.cssText = "border:2px solid #0f172a; border-radius:14px; padding:16px; text-align:center; background:#fff; display:flex; flex-direction:column; align-items:center;";
         card.innerHTML = `
-          <div style="font-size:13px; font-weight:bold; color:#475569;">${sName}</div>
+          <div style="font-size:13px; font-weight:bold; color:#475569;">${sName}</i></div>
           <div style="font-size:18px; font-weight:900; color:#0f172a; margin:6px 0 12px;">${target.label}</div>
           <div id="qrBox_${idx}" style="padding:8px; background:#fff;"></div>
           <div style="font-size:11px; color:#64748b; margin-top:10px;">📱 請用手機相機掃描點餐</div>
