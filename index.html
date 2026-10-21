@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title id="pageTitle">劉家川味牛肉麵 - 線上點餐</title>
+  <title id="pageTitle">線上點餐</title>
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
   <!-- 引入同目錄下的獨立 Firebase 設定檔 -->
@@ -330,7 +330,7 @@
   <!-- 頂部導覽列 -->
   <header class="header">
     <div class="header-top">
-      <h1 class="store-title" id="headerStoreName">劉家川味牛肉麵</h1>
+      <h1 class="store-title" id="headerStoreName">店家資訊載入中…</h1>
       <span id="displayTableNumber" class="table-badge badge-takeout">載入桌號中...</span>
     </div>
     <div class="header-sub">
@@ -345,13 +345,13 @@
   <div id="infoModal" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 id="modalStoreName">劉家川味牛肉麵</h3>
+        <h3 id="modalStoreName">店家資訊載入中…</h3>
         <button class="close-btn" onclick="closeInfoModal()">✕</button>
       </div>
       <div style="font-size: 14px; line-height: 1.75; color: #444;">
-        <p><strong>📍 地址：</strong><span id="modalStoreAddress">台南市永康區中山北路131號</span></p>
-        <p><strong>📞 電話：</strong><span id="modalStorePhone">06-2312729</span></p>
-        <p><strong>⏰ 營業時間：</strong><span id="modalStoreHours">11:00-14:00, 17:00-20:30</span></p>
+        <p><strong>📍 地址：</strong><span id="modalStoreAddress">載入中…</span></p>
+        <p><strong>📞 電話：</strong><span id="modalStorePhone">載入中…</span></p>
+        <p><strong>⏰ 營業時間：</strong><span id="modalStoreHours">載入中…</span></p>
         <hr style="margin: 12px 0; border: none; border-top: 1px dashed #ddd;">
         <p><strong>💡 顧客須知：</strong></p>
         <p id="modalStoreNotice" style="white-space: pre-line; color: #555; margin-top: 4px;">歡迎光臨！內用顧客請直接掃描桌號點餐，餐點現點現做請耐心等候。</p>
@@ -371,7 +371,7 @@
     </div>
     <!-- 菜單底部常駐版本與店名資訊 -->
     <div style="text-align: center; padding: 18px 16px 10px; color: #a0aec0; font-size: 12px;">
-      <p id="footerStoreName" style="color: #718096; font-weight: 600;">劉家川味牛肉麵</p>
+      <p id="footerStoreName" style="color: #718096; font-weight: 600;">店家資訊載入中…</p>
       <p style="font-size: 11px; margin-top: 4px; color: #d32f2f; font-weight: 700;">系統版本: v4.1 - 台灣手機10碼與市話防呆加固版</p>
     </div>
   </div>
@@ -411,7 +411,7 @@
       </div>
 
       <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid #f0f0f0; text-align: center;">
-        <p style="color: #718096; font-size: 13px;" id="dashboardStoreName">劉家川味牛肉麵</p>
+        <p style="color: #718096; font-size: 13px;" id="dashboardStoreName">店家資訊載入中…</p>
         <p style="color: #d32f2f; font-size: 11px; font-weight: 700; margin-top: 4px;">系統版本: v4.1 - 台灣手機10碼與市話防呆加固版</p>
       </div>
     </div>
@@ -1014,7 +1014,7 @@
 
       const curMins = now.getHours() * 60 + now.getMinutes();
       let isOpen = false;
-      const hoursArr = storeSettings.hours || ["11:00-14:00", "17:00-20:30"];
+      const hoursArr = storeSettings.hours || [];
       for (const range of hoursArr) {
         const [s, e] = range.split("-");
         if (s && e) {
@@ -1127,7 +1127,7 @@
       db.collection("system_settings").doc("store_info").onSnapshot(doc => {
         if (doc.exists) {
           storeSettings = doc.data();
-          const sName = storeSettings.store_name || "劉家川味牛肉麵";
+          const sName = storeSettings.store_name || "線上點餐";
           document.getElementById("pageTitle").innerText = `${sName} - 線上點餐`;
           document.getElementById("headerStoreName").innerText = sName;
           document.getElementById("modalStoreName").innerText = sName;
