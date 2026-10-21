@@ -727,11 +727,7 @@
 
 <!-- [Section 6: JS 系統變數與共用函式] Start -->
   <script>
-    // 嚴格防呆檢查：確保 firebaseConfig.js 成功載入
-    if (!window.FIREBASE_CONFIG) {
-      alert("⚠️ 嚴重錯誤：找不到 firebaseConfig.js 設定檔！請將 firebaseConfig.js 與 admin.html 放在同一個目錄下。");
-    }
-
+    // 優先讀取外部獨立設定檔 (firebaseConfig.js)
     const firebaseConfig = window.FIREBASE_CONFIG || {
       apiKey: "AIzaSyAm2HTW9fmse5lXnzrkMyEQQYZpAzQoHD4",
       authDomain: "liujia-689d7.firebaseapp.com",
@@ -740,7 +736,6 @@
       messagingSenderId: "376230897719",
       appId: "1:376230897719:web:07481db92df75494d4b7b2"
     };
-
     if (!firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
     }
@@ -754,7 +749,7 @@
     let adminMenuItems = [];
     let globalTableConfig = [];
     let storeInfoData = {};
-    let cloudAdminPin = "1111"; // 預設安全備用密碼
+    let cloudAdminPin = "1111";
 
     // 總部 Feature Flags 授權狀態
     let licenseFlags = {
@@ -770,22 +765,19 @@
     // 台灣手機與市話號碼格式驗證器
     function validateTaiwanPhone(rawPhone) {
       const cleaned = String(rawPhone || "").replace(/[-\s()]/g, "");
-      const isMobile = /^09\d{8}$/.test(cleaned); // 台灣手機 09 開頭共 10 碼
-      const isLandline = /^\d{7}$/.test(cleaned) || /^0\d{8}$/.test(cleaned); // 市話 7 碼或含區碼 9 碼
+      const isMobile = /^09\d{8}$/.test(cleaned);
+      const isLandline = /^\d{7}$/.test(cleaned) || /^0\d{8}$/.test(cleaned);
       return { valid: isMobile || isLandline, cleaned };
     }
 
-    // 語音提醒狀態
     let isVoiceAlertEnabled = localStorage.getItem("liujia_voice_alert") === "true";
     let knownPendingOrderIds = new Set();
     let initialOrdersLoaded = false;
 
-    // 結帳與換桌暫存
     let currentCheckoutOrders = [];
     let changingOrderId = null;
     let confirmCallback = null;
 
-    // POS 代客點餐暫存
     let posCurrentCat = "";
     let posCart = [];
 
@@ -849,7 +841,7 @@
 
 <!-- [Section 7: JS 登入與狀態管理] Start -->
     function initSystemListeners() {
-      // 1. 監聽店家後台日常登入密碼與總部遠端強制重置指令
+      // 1. 監聽店家後台日常登入密碼
       db.collection("system_settings").doc("admin").onSnapshot(doc => {
         if (doc.exists) {
           const data = doc.data();
@@ -861,16 +853,14 @@
             cloudAdminPin = String(data.pin || "1111");
           }
         } else {
-          // 若雲端尚無 admin 文件，自動初始化一筆預設 1111
           db.collection("system_settings").doc("admin").set({ pin: "1111", force_reset_pin: false }, { merge: true });
           cloudAdminPin = "1111";
         }
       }, err => {
-        console.warn("監聽 admin 密碼失敗，使用預設密碼 1111:", err);
-        cloudAdminPin = "1111";
+        console.warn("監聽 admin 失敗，使用預設 1111:", err);
       });
 
-      // 2. 監聽總部 License、三大進階付費開關與首次裝置綁定鎖
+      // 2. 監聽總部 License 與首次裝置綁定鎖
       db.collection("system_settings").doc("license").onSnapshot(doc => {
         if (doc.exists) {
           const d = doc.data();
@@ -881,7 +871,6 @@
           licenseFlags.activation_pin = String(d.activation_pin || "888888");
           licenseFlags.device_epoch = Number(d.device_epoch || 1);
 
-          // 檢查本設備是否已完成首次系統商授權綁定
           const savedEpoch = Number(localStorage.getItem("liujia_device_bound_epoch") || 0);
           const actOverlay = document.getElementById("deviceActivationOverlay");
           if (savedEpoch !== licenseFlags.device_epoch) {
@@ -899,7 +888,6 @@
           }
           applyFeatureFlagsUI();
         } else {
-          // 若尚未建立 license 文件，預設檢查本機是否綁定過 v1
           const savedEpoch = Number(localStorage.getItem("liujia_device_bound_epoch") || 0);
           if (savedEpoch !== 1) {
             document.getElementById("deviceActivationOverlay").style.display = "flex";
@@ -918,8 +906,6 @@
           document.getElementById("loginStoreTitle").innerText = `${sName} 後台`;
           populateStoreSettingsForm();
         }
-      }, err => {
-        console.warn("監聽 store_info 失敗:", err);
       });
 
       db.collection("system_settings").doc("tables_config").onSnapshot(doc => {
@@ -933,8 +919,6 @@
           ];
         }
         renderTablesConfigList();
-      }, err => {
-        console.warn("監聽 tables_config 失敗:", err);
       });
     }
 
@@ -966,19 +950,46 @@
       }
     };
 
-    window.verifyPin = function() {
+    // 🌟 升級版登入驗證：主動從雲端抓取最新 PIN 碼，徹底解決非同步時間差導致按了沒反應的問題
+    window.verifyPin = async function() {
       const input = document.getElementById("pinInput").value.trim();
-      // 比對雲端取得的密碼，若雲端尚未同步完成則預設比對 1111
-      const activePin = String(cloudAdminPin || "1111");
-      if (input === activePin) {
-        document.getElementById("loginOverlay").style.display = "none";
-        startListeningOrders();
-        startListeningMenu();
-        showToast("🔓 成功登入後台！");
-      } else {
-        showToast("❌ 密碼錯誤，請重新輸入！");
-        document.getElementById("pinInput").value = "";
-        document.getElementById("pinInput").focus();
+      if (!input) {
+        showToast("⚠️ 請輸入密碼！");
+        return;
+      }
+
+      showToast("⏳ 正在驗證密碼...");
+
+      try {
+        const docSnap = await db.collection("system_settings").doc("admin").get();
+        let validPin = "1111";
+        if (docSnap.exists && docSnap.data().pin) {
+          validPin = String(docSnap.data().pin);
+        } else if (cloudAdminPin) {
+          validPin = String(cloudAdminPin);
+        }
+
+        if (input === validPin) {
+          document.getElementById("loginOverlay").style.display = "none";
+          startListeningOrders();
+          startListeningMenu();
+          showToast("🔓 登入成功！");
+        } else {
+          showToast("❌ 密碼錯誤，請重新輸入！");
+          document.getElementById("pinInput").value = "";
+          document.getElementById("pinInput").focus();
+        }
+      } catch (e) {
+        console.error("驗證密碼發生異常:", e);
+        // 離線防呆：若雲端讀取失敗，允許用預設 1111 或全域暫存登入
+        if (input === (cloudAdminPin || "1111")) {
+          document.getElementById("loginOverlay").style.display = "none";
+          startListeningOrders();
+          startListeningMenu();
+          showToast("🔓 離線登入成功！");
+        } else {
+          showToast("❌ 雲端連線失敗且密碼錯誤！");
+        }
       }
     };
 
@@ -994,7 +1005,6 @@
       if (tabName === "reports") renderDailyReports();
     };
 
-    // 修改後台密碼 (強制驗證舊密碼 + 二次確認新密碼)
     window.changeAdminPin = async function() {
       const oldP = document.getElementById("oldPinInput").value.trim();
       const newP = document.getElementById("newPinInput").value.trim();
@@ -1016,7 +1026,6 @@
       }
     };
 
-    // 每日號碼歸零與清桌
     window.triggerDailyReset = function() {
       openConfirm("確定要將今日排隊號碼歸零（重置回 100 號），並將所有內用桌位清空為「空閒」嗎？", async (yes) => {
         if (!yes) return;
