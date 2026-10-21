@@ -501,17 +501,28 @@
 
 <!-- [Section 7: JS 全域變數與初始化] Start -->
   <script>
-    // 優先讀取外部獨立設定檔 (firebaseConfig.js)，若未載入則使用內建預設值防呆
-    const firebaseConfig = window.FIREBASE_CONFIG || {
-      apiKey: "AIzaSyAm2HTW9fmse5lXnzrkMyEQQYZpAzQoHD4",
-      authDomain: "liujia-689d7.firebaseapp.com",
-      projectId: "liujia-689d7",
-      storageBucket: "liujia-689d7.firebasestorage.app",
-      messagingSenderId: "376230897719",
-      appId: "1:376230897719:web:07481db92df75494d4b7b2"
-    };
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
+    // 各店連線設定只由同目錄的 firebaseConfig.js 提供。
+    // 不在此重新宣告 firebaseConfig，也不使用其他店家的內建設定。
+    function stopOrderingStartup(message) {
+      document.getElementById("menuContainer").textContent = message;
+      document.getElementById("displayTableNumber").textContent = "點餐服務尚未啟動";
+      throw new Error(message);
+    }
+    if (!window.FIREBASE_CONFIG ||
+        !["apiKey", "projectId", "appId"].every(key =>
+          typeof window.FIREBASE_CONFIG[key] === "string" && window.FIREBASE_CONFIG[key].trim())) {
+      stopOrderingStartup("無法載入店家連線設定。請確認同目錄的 firebaseConfig.js 存在，且已設定 window.FIREBASE_CONFIG，再重新整理。");
+    }
+    if (typeof firebase === "undefined" || typeof firebase.firestore !== "function") {
+      stopOrderingStartup("點餐連線元件載入失敗，請確認網路連線後重新整理。");
+    }
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(window.FIREBASE_CONFIG);
+      }
+    } catch (error) {
+      console.error("店家連線初始化失敗：", error);
+      stopOrderingStartup("店家連線設定初始化失敗，請聯絡店家檢查 firebaseConfig.js。");
     }
     const db = firebase.firestore();
 
@@ -596,9 +607,10 @@
       const tabContainer = document.getElementById("categoryTabs");
       if (!categories.length) {
         tabContainer.innerHTML = "";
+        currentCategory = "";
         return;
       }
-      if (!currentCategory) currentCategory = categories[0].name;
+      if (!categories.some(cat => cat.name === currentCategory)) currentCategory = categories[0].name;
       tabContainer.innerHTML = categories.map(cat => `
         <button class="tab-btn ${cat.name === currentCategory ? 'active' : ''}" onclick="selectCategory('${cat.name}')">
           ${cat.name}
