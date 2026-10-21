@@ -684,6 +684,7 @@
           <span>至</span>
           <input type="time" id="hoursEnd2" class="input-field" style="margin:0;" value="20:30">
         </div>
+        <label style="display:block; font-size:13px; margin-bottom:14px;"><input type="checkbox" id="hoursUntilSoldOut2" onchange="document.getElementById('hoursEnd2').disabled = this.checked;"> 第二段營業至售完（不指定結束時間，售完請手動暫停接單）</label>
         <!-- 保留隱藏相容欄位 -->
         <input type="hidden" id="setStoreHours">
 
@@ -727,7 +728,7 @@
 
 <!-- [Section 6: JS 系統變數與共用函式] Start -->
   <script src="./firebaseConfig.js"></script>
-  <script src="./defaultMenu.js"></script>
+  <script src="./defaultMenu.js?v=20261021-2"></script>
   <script>
     // 專案設定只由 firebaseConfig.js 提供；缺檔時停止啟動，避免連錯資料庫。
     const connectionConfig = window.FIREBASE_CONFIG;
@@ -1759,9 +1760,13 @@
       });
       if (syncStore) {
         const info = template.store_info;
-        if (!info || !text(info.store_name) || ["store_phone", "store_address", "store_notice"].some(k => typeof info[k] !== "string") ||
-            !Array.isArray(info.hours) || info.hours.some(h => !text(h)) ||
-            !Array.isArray(info.closed_days) || info.closed_days.some(d => !Number.isInteger(d) || d < 0 || d > 6)) fail("店家基本資料不完整或公休日不正確。");
+        if (!info || typeof info !== "object") fail("缺少 store_info 店家基本資料。");
+        if (!text(info.store_name)) fail("store_info.store_name 店名必須為非空字串。");
+        ["store_phone", "store_address", "store_notice"].forEach(k => {
+          if (typeof info[k] !== "string") fail("store_info." + k + " 必須為字串（無內容可填空字串）。");
+        });
+        if (!Array.isArray(info.hours) || info.hours.some(h => !text(h))) fail("store_info.hours 必須為字串陣列，例如 [\"10:30-13:00\", \"16:40-售完\"]。");
+        if (!Array.isArray(info.closed_days) || info.closed_days.some(d => !Number.isInteger(d) || d < 0 || d > 6)) fail("store_info.closed_days 必須為 0～6 的數字陣列，例如週六日公休為 [6, 0]，不可使用字串數字。");
       }
     }
 
@@ -1999,10 +2004,15 @@
       if (hoursArr[1] && hoursArr[1].includes("-")) {
         const [s2, e2] = hoursArr[1].split("-");
         document.getElementById("hoursStart2").value = s2.trim();
-        document.getElementById("hoursEnd2").value = e2.trim();
+        const untilSoldOut = e2.trim() === "售完";
+        document.getElementById("hoursUntilSoldOut2").checked = untilSoldOut;
+        document.getElementById("hoursEnd2").disabled = untilSoldOut;
+        document.getElementById("hoursEnd2").value = untilSoldOut ? "" : e2.trim();
       } else {
         document.getElementById("hoursStart2").value = "";
         document.getElementById("hoursEnd2").value = "";
+        document.getElementById("hoursUntilSoldOut2").checked = false;
+        document.getElementById("hoursEnd2").disabled = false;
       }
 
       document.getElementById("setStoreNotice").value = storeInfoData.store_notice || "";
@@ -2025,7 +2035,8 @@
       const e2 = document.getElementById("hoursEnd2")?.value;
       const hours = [];
       if (s1 && e1) hours.push(`${s1}-${e1}`);
-      if (s2 && e2) hours.push(`${s2}-${e2}`);
+      const untilSoldOut = document.getElementById("hoursUntilSoldOut2").checked;
+      if (s2 && (e2 || untilSoldOut)) hours.push(`${s2}-${untilSoldOut ? "售完" : e2}`);
 
       const closed_days = [];
       document.querySelectorAll("#closedDaysCheckboxes input[type='checkbox']:checked").forEach(chk => {
