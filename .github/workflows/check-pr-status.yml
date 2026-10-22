@@ -1,0 +1,109 @@
+
+name: Check Customer PR Status
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-status:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout template
+        uses: actions/checkout@v4
+
+      - name: Check all customer PRs
+        env:
+          GH_TOKEN: ${{ secrets.CUSTOMER_SYNC_TOKEN }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          customers = json.loads(
+              Path("customers.json").read_text(encoding="utf-8")
+          )["customers"]
+
+          def gh(*args):
+              result = subprocess.run(
+                  ["gh", *args],
+                  text=True,
+                  capture_output=True
+              )
+              if result.returncode != 0:
+                  raise RuntimeError(result.stderr.strip())
+              return json.loads(result.stdout)
+
+          lines = [
+              "# 客戶 PR 目前狀態總覽",
+              "",
+              "| 客戶 | PR | 目前狀態 |",
+              "|---|---|---|"
+          ]
+
+          for customer in customers:
+              try:
+                  prs = gh(
+                      "pr", "list",
+                      "--repo", customer,
+                      "--state", "all",
+                      "--limit", "100",
+                      "--json",
+                      "number,title,url,state,mergedAt,headRefName"
+                  )
+
+                  prs = [
+                      pr for pr in prs
+                      if pr["headRefName"].startswith("sync/template-")
+                  ]
+
+                  if not prs:
+                      lines.append(
+                          f"| {customer} | — | 尚無同步 PR |"
+                      )
+                      continue
+
+                  for pr in prs:
+                      if pr["mergedAt"]:
+                          status = "已合併"
+                      elif pr["state"] == "OPEN":
+                          status = "等待審核"
+                      else:
+                          status = "已關閉（未合併）"
+
+                      link = f'[PR #{pr["number"]}]({pr["url"]})'
+
+                      lines.append(
+                          f"| {customer} | {link} | {status} |"
+                      )
+
+              except Exception as e:
+                  lines.append(
+                      f"| {customer} | — | 查詢失敗，請查看執行紀錄 |"
+                  )
+                  print(f"查詢 {customer} 失敗：{e}")
+
+          lines.extend([
+              "",
+              "此報表顯示查詢執行當下的 PR 狀態。",
+              "重新執行此工作流程，即可取得最新狀態。",
+              ""
+          ])
+
+          report = "\n".join(lines)
+
+          with open(
+              os.environ["GITHUB_STEP_SUMMARY"],
+              "a",
+              encoding="utf-8"
+          ) as f:
+              f.write(report)
+
+          print(report)
+          PY
