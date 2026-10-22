@@ -1,0 +1,221 @@
+
+name: Sync Customers
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - index.html
+      - admin.html
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  read-customers:
+    runs-on: ubuntu-latest
+    outputs:
+      customers: ${{ steps.load.outputs.customers }}
+
+    steps:
+      - name: Checkout template
+        uses: actions/checkout@v4
+
+      - name: Read customer list
+        id: load
+        run: |
+          CUSTOMERS=$(python3 -c 'import json; print(json.dumps(json.load(open("customers.json", encoding="utf-8"))["customers"]))')
+          echo "customers=$CUSTOMERS" >> "$GITHUB_OUTPUT"
+
+  sync:
+    needs: read-customers
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        customer: ${{ fromJSON(needs.read-customers.outputs.customers) }}
+
+    steps:
+      - name: Initialize result
+        id: result
+        env:
+          CUSTOMER_REPO: ${{ matrix.customer }}
+        run: |
+          echo "CUSTOMER_REPO=$CUSTOMER_REPO" >> "$GITHUB_ENV"
+          echo "SYNC_STATUS=執行失敗" >> "$GITHUB_ENV"
+          echo "PR_URL=" >> "$GITHUB_ENV"
+          echo "SYNC_NOTE=請查看該客戶的執行紀錄" >> "$GITHUB_ENV"
+
+      - name: Checkout template
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: template
+
+      - name: Checkout customer
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.customer }}
+          token: ${{ secrets.CUSTOMER_SYNC_TOKEN }}
+          path: customer
+
+      - name: Merge customer files
+        working-directory: template
+        env:
+          CUSTOMER_REPO: ${{ matrix.customer }}
+        run: python3 sync_customers.py
+
+      - name: Create customer Pull Request
+        working-directory: customer
+        env:
+          GH_TOKEN: ${{ secrets.CUSTOMER_SYNC_TOKEN }}
+          TEMPLATE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "SYNC_STATUS=無需更新" >> "$GITHUB_ENV"
+            echo "SYNC_NOTE=沒有檔案變更" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          BRANCH="sync/template-$TEMPLATE_SHA"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git switch -c "$BRANCH"
+          git add index.html admin.html .sync-state.json
+          git commit -m "Sync updates from template"
+
+          AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c http.extraheader="AUTHORIZATION: basic $AUTH" \
+            push origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --repo "$CUSTOMER_REPO" \
+            --head "$BRANCH" \
+            --base main \
+            --title "同步範本網站更新" \
+            --body "由範本自動產生的更新建議。請先檢查變更，再決定是否合併。")
+
+          echo "SYNC_STATUS=等待審核" >> "$GITHUB_ENV"
+          echo "PR_URL=$PR_URL" >> "$GITHUB_ENV"
+          echo "SYNC_NOTE=PR 已建立，等待手動 Merge" >> "$GITHUB_ENV"
+
+      - name: Save customer result
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          result = {
+              "customer": os.environ.get("CUSTOMER_REPO", "未知客戶"),
+              "status": os.environ.get("SYNC_STATUS", "執行失敗"),
+              "pr_url": os.environ.get("PR_URL", ""),
+              "note": os.environ.get("SYNC_NOTE", ""),
+          }
+
+          if os.environ.get("JOB_STATUS") != "success":
+              result["status"] = "執行失敗"
+
+          Path("sync-result.json").write_text(
+              json.dumps(result, ensure_ascii=False, indent=2),
+              encoding="utf-8"
+          )
+          PY
+
+      - name: Upload customer result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-result-${{ strategy.job-index }}
+          path: sync-result.json
+          if-no-files-found: warn
+
+  summary:
+    needs: [read-customers, sync]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download customer results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sync-result-*
+          path: results
+          merge-multiple: false
+
+      - name: Create summary report
+        env:
+          EXPECTED_CUSTOMERS: ${{ needs.read-customers.outputs.customers }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          files = sorted(Path("results").glob("*/sync-result.json"))
+          results = [
+              json.loads(p.read_text(encoding="utf-8"))
+              for p in files
+          ]
+
+          expected = json.loads(
+              os.environ.get("EXPECTED_CUSTOMERS") or "[]"
+          )
+
+          found = {r["customer"] for r in results}
+
+          for customer in expected:
+              if customer not in found:
+                  results.append({
+                      "customer": customer,
+                      "status": "執行失敗",
+                      "pr_url": "",
+                      "note": "沒有收到同步結果"
+                  })
+
+          lines = [
+              "# 客戶網站同步總覽",
+              "",
+              "| 客戶 | 同步狀態 | PR | 備註 |",
+              "|---|---|---|---|"
+          ]
+
+          for r in sorted(results, key=lambda x: x["customer"]):
+              customer = r["customer"]
+              status = r["status"]
+              url = r.get("pr_url", "")
+              note = r.get("note", "")
+
+              pr = f"[查看 PR]({url})" if url else "—"
+
+              lines.append(
+                  f"| {customer} | {status} | {pr} | {note} |"
+              )
+
+          lines.extend([
+              "",
+              "PR 需人工審核並按 Merge，系統不會自動合併。",
+              ""
+          ])
+
+          with open(
+              os.environ["GITHUB_STEP_SUMMARY"],
+              "a",
+              encoding="utf-8"
+          ) as f:
+              f.write("\n".join(lines))
+          PY
