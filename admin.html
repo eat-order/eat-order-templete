@@ -451,16 +451,11 @@
 <!-- [Section 3: HTML 共用元件與彈窗] End -->
 
 <!-- [Section 4: HTML 登入畫面與首次裝置綁定鎖] Start -->
-  <div id="deviceActivationOverlay" class="modal-overlay" style="display:none; background:#020617; z-index:2000;">
-    <div class="modal-box" style="max-width:400px; text-align:center; padding:32px 24px; background:#1e293b; color:#fff; border:1px solid #f59e0b;">
-      <div style="font-size:44px; margin-bottom:10px;">🛡️</div>
-      <h2 style="margin-bottom:8px; color:#f59e0b;">首次啟用系統・裝置綁定驗證</h2>
-      <p style="font-size:13px; color:#cbd5e1; line-height:1.6; margin-bottom:18px;">
-        此設備（平板/電腦）尚未經過系統商授權綁定。<br>請由系統建置人員輸入「首次裝置啟用授權碼」以解鎖本機後台權限。
-      </p>
-      <input type="password" id="deviceActivationInput" class="input-field" style="text-align:center; font-size:22px; letter-spacing:6px; background:#0f172a; color:#f59e0b; border-color:#475569;" placeholder="••••••">
-      <button class="btn" style="width:100%; padding:13px; font-size:16px; background:#f59e0b; color:#0f172a;" onclick="verifyDeviceActivation()">🔑 驗證並永久綁定此裝置</button>
-      <p style="font-size:11px; color:#94a3b8; margin-top:14px;">驗證通過後，此設備日常開機僅需輸入店家 4 位數密碼即可登入。</p>
+  <div id="registrationOverlay" class="modal-overlay" style="display:flex; background:#020617; z-index:10000;">
+    <div class="modal-box" style="max-width:420px; text-align:center; padding:32px 24px;">
+      <h2 id="registrationTitle" style="margin-bottom:12px;">正在查驗店家授權</h2>
+      <p id="registrationMessage" style="white-space:pre-line; line-height:1.7;">請稍候，正在連線至總部確認店家登記。</p>
+      <button class="btn btn-primary" onclick="window.location.reload()" style="margin-top:18px;">重新查驗</button>
     </div>
   </div>
 
@@ -471,7 +466,7 @@
       <p style="font-size:13px; color:var(--sub); margin-bottom:18px;">請輸入日常管理密碼登入系統</p>
       <input type="password" id="pinInput" class="input-field" style="text-align:center; font-size:22px; letter-spacing:8px;" placeholder="••••">
       <button class="btn btn-primary" style="width:100%; padding:12px; font-size:16px;" onclick="verifyPin()">🔓 登入後台</button>
-      <div style="margin-top:12px; font-size:11px; color:#10b981; font-weight:bold;">✅ 本設備已通過系統商授權綁定</div>
+      <div style="margin-top:12px; font-size:11px; color:#10b981; font-weight:bold;">✅ 店家授權已通過總部查驗</div>
     </div>
   </div>
 <!-- [Section 4: HTML 登入畫面與首次裝置綁定鎖] End -->
@@ -747,6 +742,96 @@
     }
     const db = backendApp.firestore();
 
+    // 總部與店家使用不同 Firebase App；總部僅公開單店最小授權文件。
+    const HQ_REGISTRATION_CONFIG = {
+      apiKey: "AIzaSyAm2HTW9fmse5lXnzrkMyEQQYZpAzQoHD4",
+      authDomain: "liujia-689d7.firebaseapp.com",
+      projectId: "liujia-689d7"
+    };
+    const hqRegistrationApp = firebase.apps.find(app => app.name === "HQ_REGISTRATION_APP") ||
+      firebase.initializeApp(HQ_REGISTRATION_CONFIG, "HQ_REGISTRATION_APP");
+    const hqRegistrationDb = hqRegistrationApp.firestore();
+    let headquartersAllowed = false;
+    let localLicenseReady = false;
+    let adminPinReady = false;
+    let merchantListenersStarted = false;
+    let orderListenersStarted = false;
+    let merchantSessionOpen = false;
+
+    function showRegistrationBlock(title, message) {
+      headquartersAllowed = false;
+      merchantSessionOpen = false;
+      document.getElementById("pinInput").value = "";
+      document.getElementById("loginOverlay").style.display = "flex";
+      document.getElementById("registrationTitle").innerText = title;
+      document.getElementById("registrationMessage").innerText = message;
+      document.getElementById("registrationOverlay").style.display = "flex";
+    }
+
+    function registrationConnectionError(error) {
+      console.error("總部授權查驗失敗：", error);
+      const denied = error && error.code === "permission-denied";
+      showRegistrationBlock("暫時無法查驗店家授權", denied ?
+        "總部授權資料目前無法讀取，請聯絡系統服務商確認權限設定。" :
+        "無法連線至總部，請確認網路後按「重新查驗」。");
+    }
+
+    function updateMerchantAccess() {
+      if (!headquartersAllowed) return;
+      const blocked = localLicenseReady && !licenseFlags.license_active;
+      document.getElementById("licenseLockOverlay").style.display = blocked ? "flex" : "none";
+      if (blocked) {
+        merchantSessionOpen = false;
+        document.getElementById("pinInput").value = "";
+        document.getElementById("loginOverlay").style.display = "flex";
+      }
+      // 必須等店家授權與日常密碼都完成雲端讀取，才開放登入。
+      document.getElementById("registrationOverlay").style.display =
+        (!localLicenseReady || !adminPinReady) ? "flex" : "none";
+    }
+
+    function applyHeadquartersRegistration(doc) {
+      const data = doc.exists ? doc.data() : null;
+      if (!data || data.projectId !== connectionConfig.projectId || data.registered !== true) {
+        showRegistrationBlock("店家尚未完成總部登記", "請聯絡系統服務商完成店家登記或同步授權資料。");
+        return;
+      }
+      if (data.active !== true) {
+        showRegistrationBlock("店家授權已暫停", String(data.lock_reason || "請聯絡系統服務商確認授權狀態。"));
+        return;
+      }
+      headquartersAllowed = true;
+      document.getElementById("registrationTitle").innerText = "正在載入店家登入資料";
+      document.getElementById("registrationMessage").innerText = "店家登記已確認，正在讀取登入設定。";
+      if (!merchantListenersStarted) {
+        merchantListenersStarted = true;
+        initSystemListeners();
+      }
+      updateMerchantAccess();
+    }
+
+    async function startHeadquartersRegistration() {
+      const ref = hqRegistrationDb.collection("store_registrations").doc(connectionConfig.projectId);
+      let timer;
+      try {
+        // 初次查驗必須讀取伺服器，不能使用先前允許的快取直接放行。
+        const doc = await Promise.race([
+          ref.get({ source: "server" }),
+          new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("查驗逾時")), 12000); })
+        ]);
+        clearTimeout(timer);
+        applyHeadquartersRegistration(doc);
+        ref.onSnapshot({ includeMetadataChanges: true }, snapshot => {
+          if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return;
+          applyHeadquartersRegistration(snapshot);
+        }, registrationConnectionError);
+      } catch (error) {
+        clearTimeout(timer);
+        registrationConnectionError(error);
+      }
+    }
+
+
     // 全域狀態與雙軌訂單快取
     let allOrders = [];
     let activeRealtimeOrdersMap = {};
@@ -763,8 +848,6 @@
       enable_printer: false,
       enable_pro_report: false,
       enable_csv_clean: false,
-      activation_pin: "888888",
-      device_epoch: 1
     };
     let currentReportDimension = "day"; // 'day' | 'week' | 'month'
 
@@ -854,57 +937,42 @@
 <!-- [Section 7: JS 登入與狀態管理] Start -->
     function initSystemListeners() {
       // 1. 監聽店家後台日常登入密碼與總部遠端強制重置指令
-      db.collection("system_settings").doc("admin").onSnapshot(doc => {
+      db.collection("system_settings").doc("admin").onSnapshot({ includeMetadataChanges: true }, doc => {
+        if (doc.metadata.fromCache || doc.metadata.hasPendingWrites) return;
         if (doc.exists) {
           const data = doc.data();
+          cloudAdminPin = data.force_reset_pin ? "1111" : String(data.pin || "1111");
           if (data.force_reset_pin) {
-            cloudAdminPin = "1111";
-            db.collection("system_settings").doc("admin").set({ pin: "1111", force_reset_pin: false }, { merge: true });
+            db.collection("system_settings").doc("admin").set({ pin: "1111", force_reset_pin: false }, { merge: true })
+              .catch(error => console.error("重設日常密碼失敗：", error));
             showToast("🔄 系統服務商已將您的後台密碼重置為預設 1111");
-          } else {
-            cloudAdminPin = String(data.pin || "1111");
           }
         } else {
-          db.collection("system_settings").doc("admin").set({ pin: "1111", force_reset_pin: false }, { merge: true });
           cloudAdminPin = "1111";
         }
+        adminPinReady = true;
+        updateMerchantAccess();
+      }, error => {
+        adminPinReady = false;
+        registrationConnectionError(error);
       });
 
-      // 2. 監聽總部 License、三大進階付費開關與首次裝置綁定鎖
-      db.collection("system_settings").doc("license").onSnapshot(doc => {
-        if (doc.exists) {
-          const d = doc.data();
-          licenseFlags.license_active = d.license_active !== false;
-          licenseFlags.enable_printer = !!d.enable_printer;
-          licenseFlags.enable_pro_report = !!d.enable_pro_report;
-          licenseFlags.enable_csv_clean = !!d.enable_csv_clean;
-          licenseFlags.activation_pin = String(d.activation_pin || "888888");
-          licenseFlags.device_epoch = Number(d.device_epoch || 1);
-
-          // 檢查本設備是否已完成首次系統商授權綁定
-          const savedEpoch = Number(localStorage.getItem("liujia_device_bound_epoch") || 0);
-          const actOverlay = document.getElementById("deviceActivationOverlay");
-          if (savedEpoch !== licenseFlags.device_epoch) {
-            actOverlay.style.display = "flex";
-          } else {
-            actOverlay.style.display = "none";
-          }
-
-          const lockOverlay = document.getElementById("licenseLockOverlay");
-          if (!licenseFlags.license_active) {
-            document.getElementById("licenseLockReasonText").innerText = d.lock_reason || "本系統授權目前已暫停或到期，請聯繫系統服務商辦理續約開通。";
-            lockOverlay.style.display = "flex";
-          } else {
-            lockOverlay.style.display = "none";
-          }
-          applyFeatureFlagsUI();
-        } else {
-          // 若尚未建立 license 文件，預設檢查本機是否綁定過 v1
-          const savedEpoch = Number(localStorage.getItem("liujia_device_bound_epoch") || 0);
-          if (savedEpoch !== 1) {
-            document.getElementById("deviceActivationOverlay").style.display = "flex";
-          }
-        }
+      // 2. 店家本地授權與進階功能；總部登記是另一個必要條件。
+      db.collection("system_settings").doc("license").onSnapshot({ includeMetadataChanges: true }, doc => {
+        if (doc.metadata.fromCache || doc.metadata.hasPendingWrites) return;
+        const d = doc.exists ? doc.data() : {};
+        // 沒有舊 license 文件的新店，仍必須先通過總部有效登記。
+        licenseFlags.license_active = d.license_active !== false;
+        licenseFlags.enable_printer = !!d.enable_printer;
+        licenseFlags.enable_pro_report = !!d.enable_pro_report;
+        licenseFlags.enable_csv_clean = !!d.enable_csv_clean;
+        localLicenseReady = true;
+        document.getElementById("licenseLockReasonText").innerText = d.lock_reason || "本系統授權已暫停，請聯繫系統服務商。";
+        updateMerchantAccess();
+        applyFeatureFlagsUI();
+      }, error => {
+        localLicenseReady = false;
+        registrationConnectionError(error);
       });
 
       // 3. 監聽店家基本資訊與桌位設定
@@ -948,24 +1016,20 @@
       renderDailyReports();
     }
 
-    window.verifyDeviceActivation = function() {
-      const input = document.getElementById("deviceActivationInput").value.trim();
-      if (input === licenseFlags.activation_pin) {
-        localStorage.setItem("liujia_device_bound_epoch", String(licenseFlags.device_epoch));
-        document.getElementById("deviceActivationInput").value = "";
-        document.getElementById("deviceActivationOverlay").style.display = "none";
-        showToast("✅ 此裝置已成功永久綁定！請輸入日常密碼登入");
-      } else {
-        showToast("❌ 首次啟用授權碼錯誤！請洽系統建置商 (預設 888888)");
-      }
-    };
-
     window.verifyPin = function() {
+      if (!headquartersAllowed || !localLicenseReady || !adminPinReady || !licenseFlags.license_active) {
+        return showToast("請先完成店家授權與登入資料查驗。");
+      }
       const input = document.getElementById("pinInput").value.trim();
       if (input === cloudAdminPin) {
+        merchantSessionOpen = true;
+        document.getElementById("pinInput").value = "";
         document.getElementById("loginOverlay").style.display = "none";
-        startListeningOrders();
-        startListeningMenu();
+        if (!orderListenersStarted) {
+          orderListenersStarted = true;
+          startListeningOrders();
+          startListeningMenu();
+        }
       } else {
         showToast("❌ 密碼錯誤，請重新輸入！");
       }
@@ -2190,7 +2254,7 @@
       document.getElementById("qrPrintModal").style.display = "none";
     };
 
-    window.addEventListener("DOMContentLoaded", initSystemListeners);
+    window.addEventListener("DOMContentLoaded", startHeadquartersRegistration);
   </script>
 </body>
 </html>
